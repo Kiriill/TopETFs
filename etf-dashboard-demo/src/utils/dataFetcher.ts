@@ -1,6 +1,6 @@
 import { ETFData } from '../types';
 
-const API_URL = 'http://localhost:3001';
+const API_URL = 'https://topetfs.onrender.com';
 
 export async function fetchLatestETFData(): Promise<ETFData[]> {
   try {
