@@ -57,7 +57,7 @@ function App() {
     <div className="container mx-auto p-4">
       <h1 className="text-2xl font-bold mb-4">Top performing Australian ETFs</h1>
       <div className="text-gray-600 mb-6">
-        List of top 10 performing ETFs on the ASX before accounting for fees
+        List of top performing ETFs on the ASX before accounting for fees
       </div>
       
       <div className="mb-4">
