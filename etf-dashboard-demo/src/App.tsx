@@ -10,6 +10,12 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedPeriod, setSelectedPeriod] = useState<TimePeriod>('5Y');
+  const [visibleCount, setVisibleCount] = useState(10);
+
+  // Reset visibleCount when etfData or selectedPeriod changes
+  useEffect(() => {
+    setVisibleCount(10);
+  }, [etfData, selectedPeriod]);
 
   useEffect(() => {
     fetchData();
@@ -47,8 +53,10 @@ function App() {
   const medals = ['🥇', '🥈', '🥉'];
 
   const sortedETFs = [...etfData]
-    .sort((a, b) => b.performance[selectedPeriod] - a.performance[selectedPeriod])
-    .slice(0, 10);
+    .sort((a, b) => b.performance[selectedPeriod] - a.performance[selectedPeriod]);
+
+  const visibleETFs = sortedETFs.slice(0, visibleCount);
+  const canShowMore = visibleCount < sortedETFs.length;
 
   if (loading) return <div className="p-4">Loading...</div>;
   if (error) return <div className="p-4 text-red-600">{error}</div>;
@@ -74,7 +82,7 @@ function App() {
       </div>
       {/* Card-based layout for mobile */}
       <div className="flex flex-col gap-4 md:hidden">
-        {sortedETFs.map((etf, idx) => (
+        {visibleETFs.map((etf, idx) => (
           <div key={etf.symbol} className="bg-white rounded shadow p-4 flex flex-col">
             <div className="flex items-center mb-2">
               {idx < 3 ? (
@@ -101,6 +109,15 @@ function App() {
             </div>
           </div>
         ))}
+        {canShowMore && (
+          <button
+            className="mt-4 mx-auto px-6 py-2 bg-gray-200 text-gray-800 rounded shadow hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-400"
+            onClick={() => setVisibleCount((c) => c + 10)}
+            aria-label="Show more ETFs"
+          >
+            Show More
+          </button>
+        )}
       </div>
       {/* Table for desktop and tablet */}
       <div className="hidden md:block">
@@ -117,7 +134,7 @@ function App() {
               </tr>
             </thead>
             <tbody>
-              {sortedETFs.map((etf, idx) => (
+              {visibleETFs.map((etf, idx) => (
                 <tr key={etf.symbol} className="hover:bg-gray-50">
                   <td className="border p-2 text-center align-middle">
                     {idx < 3 ? medals[idx] : (idx + 1)}
@@ -137,6 +154,15 @@ function App() {
               ))}
             </tbody>
           </table>
+          {canShowMore && (
+            <button
+              className="mt-4 mx-auto block px-6 py-2 bg-gray-200 text-gray-800 rounded shadow hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-400"
+              onClick={() => setVisibleCount((c) => c + 10)}
+              aria-label="Show more ETFs"
+            >
+              Show More
+            </button>
+          )}
         </div>
       </div>
       {/* Source and Disclaimer */}
