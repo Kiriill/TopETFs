@@ -139,7 +139,7 @@ export async function fetchLatestETFData(): Promise<{ etfs: ETFData[]; dataDate:
         performance: {
           '1M': parseFloat(row['1 month total return'] || '0') || 0,
           '1Y': parseFloat(row['1 year total return'] || '0') || 0,
-          '5Y': parseFloat(row['5 year total return'] || '0') || 0,
+          '5Y': parseFloat(row['5 year total return (ann.)'] || '0') || 0,
         },
         mer: parseFloat(row['mer (% p.a) ##'] || '0') || 0,
         aum: parseFloat(row['fum ($m)#'] || '0') || 0,
