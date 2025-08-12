@@ -8,6 +8,11 @@ export interface ETFData {
   };
   mer: number;
   aum: number;
+  date?: {
+    month: string;
+    year: number;
+    monthName: string;
+  };
 }
 
 export interface StoredData {

@@ -44,18 +44,32 @@ async function fetchExcelFile(): Promise<{ data: Buffer; dateInfo: { month: stri
     const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
     const mmm = MONTHS[now.getMonth()];
     const monthName = MONTH_NAMES[now.getMonth()];
-    const urlPart = `${mmm}-${yyyy}-abs`;
-    const newUrl = `${BASE_URL}/content/dam/asx/issuers/asx-investment-products-reports/${yyyy}/excel/asx-investment-products-${urlPart}.xlsx`;
-    console.log(`Trying to fetch ASX file from: ${newUrl}`);
-    try {
-      const response = await axios.get(newUrl, { responseType: 'arraybuffer' });
-      console.log(`Successfully fetched ASX file for ${mmm} ${yyyy}`);
-      return { 
-        data: response.data, 
-        dateInfo: { month: mmm, year: yyyy, monthName: monthName }
-      };
-    } catch (error) {
-      console.warn(`File not found for ${mmm} ${yyyy}, trying previous month...`);
+    
+    // Try different URL patterns based on year
+    const urlPatterns = [];
+    
+    if (yyyy >= 2020) {
+      // 2020 onwards: use -abs suffix
+      urlPatterns.push(`${mmm}-${yyyy}-abs`);
+    } else {
+      // Pre-2020: no -abs suffix, use full month name
+      const fullMonthName = monthName.toLowerCase();
+      urlPatterns.push(`${fullMonthName}-${yyyy}`);
+    }
+    
+    for (const urlPart of urlPatterns) {
+      const newUrl = `${BASE_URL}/content/dam/asx/issuers/asx-investment-products-reports/${yyyy}/excel/asx-investment-products-${urlPart}.xlsx`;
+      console.log(`Trying to fetch ASX file from: ${newUrl}`);
+      try {
+        const response = await axios.get(newUrl, { responseType: 'arraybuffer' });
+        console.log(`Successfully fetched ASX file for ${mmm} ${yyyy}`);
+        return { 
+          data: response.data, 
+          dateInfo: { month: mmm, year: yyyy, monthName: monthName }
+        };
+      } catch (error) {
+        console.warn(`File not found for ${urlPart}, trying next pattern...`);
+      }
     }
   }
   throw new Error('No recent ASX ETF Excel file found for the last 4 months.');
@@ -90,6 +104,120 @@ function normalizeRowKeys(row: any) {
     }
   });
   return normalized;
+}
+
+export async function fetchHistoricalETFData(startYear: number = 2017, endYear: number = new Date().getFullYear()): Promise<{ etfs: ETFData[]; dataDate: { month: string; year: number; monthName: string } }> {
+  const allETFs: ETFData[] = [];
+  const MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+  const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+  
+  console.log(`Fetching historical ETF data from ${startYear} to ${endYear}`);
+  
+  for (let year = startYear; year <= endYear; year++) {
+    for (let month = 0; month < 12; month++) {
+      const mmm = MONTHS[month];
+      const monthName = MONTH_NAMES[month];
+      
+      // Skip future months
+      if (year === new Date().getFullYear() && month > new Date().getMonth()) {
+        continue;
+      }
+      
+      // Try different URL patterns based on year
+      const urlPatterns = [];
+      
+      if (year >= 2020) {
+        // 2020 onwards: use -abs suffix
+        urlPatterns.push(`${mmm}-${year}-abs`);
+      } else {
+        // Pre-2020: no -abs suffix, use full month name
+        const fullMonthName = monthName.toLowerCase();
+        urlPatterns.push(`${fullMonthName}-${year}`);
+      }
+      
+      for (const urlPart of urlPatterns) {
+        const url = `${BASE_URL}/content/dam/asx/issuers/asx-investment-products-reports/${year}/excel/asx-investment-products-${urlPart}.xlsx`;
+        console.log(`Trying to fetch ASX file from: ${url}`);
+        
+        try {
+          const response = await axios.get(url, { responseType: 'arraybuffer' });
+          console.log(`Successfully fetched ASX file for ${mmm} ${year}`);
+          
+          // Parse the Excel file
+          const workbook = XLSX.read(response.data);
+          const sheetName = workbook.SheetNames.find(name => name.trim().toLowerCase() === 'spotlight etp list');
+          if (!sheetName) {
+            console.warn(`Sheet "Spotlight ETP List" not found for ${mmm} ${year}`);
+            continue;
+          }
+          
+          const worksheet = workbook.Sheets[sheetName];
+          const jsonData = XLSX.utils.sheet_to_json(worksheet, { range: 9 });
+          
+          // Transform the data
+          const etfs: ETFData[] = jsonData
+            .map((row: any) => normalizeRowKeys(row))
+            .filter((row: any) => {
+              const hasFundName = row['fund name'] && typeof row['fund name'] === 'string' && row['fund name'].trim() !== '';
+              let fumValue = row['fum ($m)#'];
+              if (typeof fumValue === 'string') {
+                fumValue = fumValue.trim().toLowerCase();
+              }
+              const isNA = fumValue === 'n/a';
+              const fumNumber = parseFloat(row['fum ($m)#']);
+              const hasValidFUM = !isNA && !isNaN(fumNumber) && fumNumber > 0;
+              return hasFundName && hasValidFUM;
+            })
+            .map((row: any) => ({
+              symbol: row['asx code'] || '',
+              name: row['fund name'] || '',
+              performance: {
+                '1M': parseFloat(row['1 month total return'] || '0') || 0,
+                '1Y': parseFloat(row['1 year total return'] || '0') || 0,
+                '5Y': parseFloat(row['5 year total return (ann.)'] || '0') || 0,
+              },
+              mer: parseFloat(row['mer (% p.a) ##'] || '0') || 0,
+              aum: parseFloat(row['fum ($m)#'] || '0') || 0,
+              date: { month: mmm, year: year, monthName: monthName }
+            }));
+          
+          allETFs.push(...etfs);
+          console.log(`Added ${etfs.length} ETFs from ${mmm} ${year}`);
+          
+          // Save individual month data
+          const monthDataFile = path.join(DATA_DIR, `etf_data_${year}_${mmm}.json`);
+          fs.writeFileSync(monthDataFile, JSON.stringify({ 
+            data: etfs, 
+            timestamp: Date.now(), 
+            dataDate: { month: mmm, year: year, monthName: monthName }
+          }));
+          
+          break; // Successfully got this month, move to next
+        } catch (error) {
+          console.warn(`File not found for ${urlPart}`);
+          continue;
+        }
+      }
+      
+      // Add a small delay to be respectful to ASX servers
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+  }
+  
+  console.log(`Total ETFs collected: ${allETFs.length}`);
+  
+  // Save complete historical data
+  const historicalDataFile = path.join(DATA_DIR, 'etf_historical_data.json');
+  fs.writeFileSync(historicalDataFile, JSON.stringify({ 
+    data: allETFs, 
+    timestamp: Date.now(),
+    dateRange: { startYear, endYear }
+  }));
+  
+  return { 
+    etfs: allETFs, 
+    dataDate: { month: 'historical', year: endYear, monthName: 'Historical Data' }
+  };
 }
 
 export async function fetchLatestETFData(): Promise<{ etfs: ETFData[]; dataDate: { month: string; year: number; monthName: string } }> {

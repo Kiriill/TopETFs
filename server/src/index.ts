@@ -1,7 +1,7 @@
 import express, { Request, Response } from 'express';
 import cors from 'cors';
 import cron from 'node-cron';
-import { fetchLatestETFData } from './services/etfService';
+import { fetchLatestETFData, fetchHistoricalETFData } from './services/etfService';
 import { createServer } from 'http';
 import { AddressInfo } from 'net';
 
@@ -29,6 +29,26 @@ app.get('/api/etfs', async (req: Request, res: Response) => {
       error: 'Failed to fetch ETF data',
       details: error instanceof Error ? error.message : String(error)
     });
+  }
+});
+
+// API endpoint to get historical ETF data
+app.get('/api/etfs/historical', async (req: Request, res: Response) => {
+  try {
+    const startYear = parseInt(req.query.startYear as string) || 2017;
+    const endYear = parseInt(req.query.endYear as string) || new Date().getFullYear();
+    
+    console.log(`Historical data request: ${startYear} to ${endYear}`);
+    const result = await fetchHistoricalETFData(startYear, endYear);
+    res.json({ 
+      etfs: result.etfs, 
+      dataDate: result.dataDate,
+      totalRecords: result.etfs.length,
+      dateRange: { startYear, endYear }
+    });
+  } catch (error) {
+    console.error('Error fetching historical ETF data:', error);
+    res.status(500).json({ error: 'Failed to fetch historical ETF data' });
   }
 });
 
