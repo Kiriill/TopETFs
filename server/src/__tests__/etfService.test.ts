@@ -57,15 +57,19 @@ describe('ETF Service Tests', () => {
       jest.spyOn(axios, 'get').mockRejectedValueOnce(new Error('404'));
       const data = await fetchLatestETFData();
       expect(data).toBeDefined();
-      expect(data.length).toBeGreaterThan(0);
-      expect(data[0].symbol).toBe('VAS');
+      expect(data.etfs).toBeDefined();
+      expect(data.dataDate).toBeDefined();
+      expect(data.etfs.length).toBeGreaterThan(0);
+      expect(data.etfs[0].symbol).toBe('VAS');
     });
 
     it('should handle network errors gracefully', async () => {
       jest.spyOn(axios, 'get').mockRejectedValueOnce(new Error('Network Error'));
       const data = await fetchLatestETFData();
       expect(data).toBeDefined();
-      expect(data.length).toBeGreaterThan(0);
+      expect(data.etfs).toBeDefined();
+      expect(data.dataDate).toBeDefined();
+      expect(data.etfs.length).toBeGreaterThan(0);
     });
 
     it('should process Excel data correctly', async () => {
@@ -81,8 +85,10 @@ describe('ETF Service Tests', () => {
 
       const data = await fetchLatestETFData();
       expect(data).toBeDefined();
-      expect(data.length).toBe(2);
-      expect(data[0]).toEqual({
+      expect(data.etfs).toBeDefined();
+      expect(data.dataDate).toBeDefined();
+      expect(data.etfs.length).toBe(2);
+      expect(data.etfs[0]).toEqual({
         symbol: 'VAS',
         name: 'Vanguard Australian Shares Index ETF',
         performance: {
