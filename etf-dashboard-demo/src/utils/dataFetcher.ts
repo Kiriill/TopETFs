@@ -1,9 +1,9 @@
-import { ETFData } from '../types';
+import { ETFData, ETFResponse } from '../types';
 
 const API_URL = 'https://topetfs.onrender.com';
 // const API_URL = 'http://localhost:3001';
 
-export async function fetchLatestETFData(): Promise<ETFData[]> {
+export async function fetchLatestETFData(): Promise<ETFResponse> {
   try {
     console.log('Fetching ETF data from:', `${API_URL}/api/etfs`);
     
@@ -24,7 +24,7 @@ export async function fetchLatestETFData(): Promise<ETFData[]> {
     const data = await response.json();
     console.log('Received ETF data:', data);
     
-    if (!Array.isArray(data)) {
+    if (!data.etfs || !Array.isArray(data.etfs)) {
       throw new Error('Invalid data format received from server');
     }
 
@@ -32,18 +32,25 @@ export async function fetchLatestETFData(): Promise<ETFData[]> {
   } catch (error) {
     console.error('Error fetching ETF data:', error);
     // Return mock data for development
-    return [
-      {
-        symbol: 'VAS',
-        name: 'Vanguard Australian Shares Index ETF',
-        performance: {
-          '1M': 2.5,
-          '1Y': 12.3,
-          '5Y': 45.6
-        },
-        mer: 0.10,
-        aum: 9800000000
+    return {
+      etfs: [
+        {
+          symbol: 'VAS',
+          name: 'Vanguard Australian Shares Index ETF',
+          performance: {
+            '1M': 2.5,
+            '1Y': 12.3,
+            '5Y': 45.6
+          },
+          mer: 0.10,
+          aum: 9800000000
+        }
+      ],
+      dataDate: {
+        month: 'mock',
+        year: new Date().getFullYear(),
+        monthName: 'Mock Data'
       }
-    ];
+    };
   }
 } 

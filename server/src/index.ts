@@ -20,9 +20,9 @@ app.get('/health', (req: Request, res: Response) => {
 app.get('/api/etfs', async (req: Request, res: Response) => {
   try {
     console.log('Received request for ETF data');
-    const data = await fetchLatestETFData();
-    console.log(`Successfully fetched ${data.length} ETFs`);
-    res.json(data);
+    const result = await fetchLatestETFData();
+    console.log(`Successfully fetched ${result.etfs.length} ETFs from ${result.dataDate.monthName} ${result.dataDate.year}`);
+    res.json({ etfs: result.etfs, dataDate: result.dataDate });
   } catch (error) {
     console.error('Error serving ETF data:', error);
     res.status(500).json({ 

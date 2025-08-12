@@ -33,7 +33,7 @@ function getPreviousMonthMMMYYYYABS(): { mmm: string, yyyy: string, urlPart: str
   };
 }
 
-async function fetchExcelFile(): Promise<Buffer> {
+async function fetchExcelFile(): Promise<{ data: Buffer; dateInfo: { month: string; year: number; monthName: string } }> {
   // Try up to 4 months back
   for (let i = 1; i <= 4; i++) {
     const now = new Date();
@@ -41,14 +41,19 @@ async function fetchExcelFile(): Promise<Buffer> {
     now.setMonth(now.getMonth() - i);
     const yyyy = now.getFullYear();
     const MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+    const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
     const mmm = MONTHS[now.getMonth()];
+    const monthName = MONTH_NAMES[now.getMonth()];
     const urlPart = `${mmm}-${yyyy}-abs`;
     const newUrl = `${BASE_URL}/content/dam/asx/issuers/asx-investment-products-reports/${yyyy}/excel/asx-investment-products-${urlPart}.xlsx`;
     console.log(`Trying to fetch ASX file from: ${newUrl}`);
     try {
       const response = await axios.get(newUrl, { responseType: 'arraybuffer' });
       console.log(`Successfully fetched ASX file for ${mmm} ${yyyy}`);
-      return response.data;
+      return { 
+        data: response.data, 
+        dateInfo: { month: mmm, year: yyyy, monthName: monthName }
+      };
     } catch (error) {
       console.warn(`File not found for ${mmm} ${yyyy}, trying previous month...`);
     }
@@ -87,10 +92,10 @@ function normalizeRowKeys(row: any) {
   return normalized;
 }
 
-export async function fetchLatestETFData(): Promise<ETFData[]> {
+export async function fetchLatestETFData(): Promise<{ etfs: ETFData[]; dataDate: { month: string; year: number; monthName: string } }> {
   try {
     const excelData = await fetchExcelFile();
-    const workbook = XLSX.read(excelData);
+    const workbook = XLSX.read(excelData.data);
     const sheetName = workbook.SheetNames.find(name => name.trim().toLowerCase() === 'spotlight etp list');
     if (!sheetName) {
       throw new Error('Sheet "Spotlight ETP List" not found in the Excel file.');
@@ -98,17 +103,19 @@ export async function fetchLatestETFData(): Promise<ETFData[]> {
     const worksheet = workbook.Sheets[sheetName];
     const jsonData = XLSX.utils.sheet_to_json(worksheet, { range: 9 });
     if (jsonData.length > 0) {
+      console.log('First row keys (raw):', Object.keys(jsonData[0] as object));
       const norm = normalizeRowKeys(jsonData[0]);
-      console.log('First normalized row:', norm);
-    }
-    if (jsonData.length > 1) {
-      const norm2 = normalizeRowKeys(jsonData[1]);
-      console.log('Second normalized row:', norm2);
+      console.log('First row keys (normalized):', Object.keys(norm));
     }
 
     // Log all headers from the header row (pre-normalisation)
     const headerRow = XLSX.utils.sheet_to_json(worksheet, { header: 1, range: 9 })[0];
     console.log('Header row (raw):', headerRow);
+
+    if (jsonData.length > 1) {
+      const norm2 = normalizeRowKeys(jsonData[1]);
+      console.log('Second normalized row:', norm2);
+    }
 
     // Transform the data
     const etfs: ETFData[] = jsonData
@@ -132,15 +139,15 @@ export async function fetchLatestETFData(): Promise<ETFData[]> {
         performance: {
           '1M': parseFloat(row['1 month total return'] || '0') || 0,
           '1Y': parseFloat(row['1 year total return'] || '0') || 0,
-          '5Y': parseFloat(row['5 year total return (ann.)'] || '0') || 0,
+          '5Y': parseFloat(row['5 year total return'] || '0') || 0,
         },
         mer: parseFloat(row['mer (% p.a) ##'] || '0') || 0,
         aum: parseFloat(row['fum ($m)#'] || '0') || 0,
       }));
 
     // Save to cache
-    fs.writeFileSync(DATA_FILE, JSON.stringify({ data: etfs, timestamp: Date.now() }));
-    return etfs;
+    fs.writeFileSync(DATA_FILE, JSON.stringify({ data: etfs, timestamp: Date.now(), dataDate: excelData.dateInfo }));
+    return { etfs, dataDate: excelData.dateInfo };
   } catch (error) {
     console.error('Error fetching ETF data:', error);
     
@@ -148,12 +155,12 @@ export async function fetchLatestETFData(): Promise<ETFData[]> {
     if (fs.existsSync(DATA_FILE)) {
       console.log('Using cached data');
       const cached = JSON.parse(fs.readFileSync(DATA_FILE, 'utf-8'));
-      return cached.data;
+      return { etfs: cached.data, dataDate: cached.dataDate || { month: 'unknown', year: new Date().getFullYear(), monthName: 'Unknown' } };
     }
 
     // Use mock data as last resort
     console.log('Using mock data');
-    return getMockData();
+    return { etfs: getMockData(), dataDate: { month: 'mock', year: new Date().getFullYear(), monthName: 'Mock Data' } };
   }
 }
 

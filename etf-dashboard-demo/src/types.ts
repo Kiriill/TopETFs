@@ -11,4 +11,13 @@ export interface ETF {
 }
 
 // Alias for backward compatibility
-export type ETFData = ETF; 
+export type ETFData = ETF;
+
+export interface ETFResponse {
+  etfs: ETF[];
+  dataDate: {
+    month: string;
+    year: number;
+    monthName: string;
+  };
+} 

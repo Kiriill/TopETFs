@@ -11,6 +11,7 @@ function App() {
   const [error, setError] = useState<string | null>(null);
   const [selectedPeriod, setSelectedPeriod] = useState<TimePeriod>('5Y');
   const [visibleCount, setVisibleCount] = useState(10);
+  const [dataDate, setDataDate] = useState<{ monthName: string; year: number } | null>(null);
 
   // Reset visibleCount when etfData or selectedPeriod changes
   useEffect(() => {
@@ -25,8 +26,9 @@ function App() {
     setLoading(true);
     setError(null);
     try {
-      const data = await fetchLatestETFData();
-      setEtfData(data);
+      const response = await fetchLatestETFData();
+      setEtfData(response.etfs);
+      setDataDate(response.dataDate);
       setLoading(false);
     } catch (err) {
       setError('Failed to load ETF data');
@@ -65,7 +67,7 @@ function App() {
     <div className="container mx-auto p-4">
       <h1 className="text-2xl font-bold mb-4">Top performing Australian ETFs</h1>
       <div className="text-gray-600 mb-6">
-        List of top performing ETFs on the ASX before accounting for fees
+        List of top performing ETFs on the ASX before accounting for fees as of {dataDate ? `${dataDate.monthName} ${dataDate.year}` : 'recent data'}
       </div>
       
       <div className="mb-4">
