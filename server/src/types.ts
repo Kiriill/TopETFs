@@ -8,6 +8,7 @@ export interface ETFData {
   };
   mer: number;
   aum: number;
+  price?: number;
   date?: {
     month: string;
     year: number;

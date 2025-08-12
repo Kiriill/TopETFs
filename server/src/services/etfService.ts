@@ -87,8 +87,18 @@ export async function checkForNewData(): Promise<boolean> {
 }
 
 const EXPECTED_KEYS = [
-  'asx code', 'fund name', 'mer (% p.a) ##', 'fum ($m)#',
-  '1 month total return', '1 year total return', '5 year total return (ann.)'
+  'asx code',
+  'fund name',
+  'mer (% p.a) ##',
+  'fum ($m)#',
+  '1 month total return',
+  '1 year total return',
+  '5 year total return (ann.)',
+  // price columns have varied over time; accept common variants
+  'last ($)',
+  'last price ($)',
+  'price ($)',
+  'market price ($)'
 ];
 
 function normalizeKey(key: string) {
@@ -104,6 +114,39 @@ function normalizeRowKeys(row: any) {
     }
   });
   return normalized;
+}
+
+function parseNumberLoose(value: unknown): number {
+  if (value == null) return 0;
+  const s = String(value).replace(/[^0-9.\-]/g, '').trim();
+  if (s.length === 0) return 0;
+  const n = parseFloat(s);
+  return isNaN(n) ? 0 : n;
+}
+
+function toCsv(etfs: ETFData[]): string {
+  const headers = [
+    'symbol','name','price','mer','aum','perf_1M','perf_1Y','perf_5Y','month','year','monthName'
+  ];
+  const lines = [headers.join(',')];
+  for (const e of etfs) {
+    const fields = [
+      e.symbol,
+      // escape quotes in name
+      '"' + (e.name ?? '').replace(/"/g, '""') + '"',
+      e.price ?? '',
+      e.mer,
+      e.aum,
+      e.performance['1M'],
+      e.performance['1Y'],
+      e.performance['5Y'],
+      e.date?.month ?? '',
+      e.date?.year ?? '',
+      e.date?.monthName ?? ''
+    ];
+    lines.push(fields.join(','));
+  }
+  return lines.join('\n');
 }
 
 export async function fetchHistoricalETFData(startYear: number = 2017, endYear: number = new Date().getFullYear()): Promise<{ etfs: ETFData[]; dataDate: { month: string; year: number; monthName: string } }> {
@@ -178,19 +221,22 @@ export async function fetchHistoricalETFData(startYear: number = 2017, endYear: 
               },
               mer: parseFloat(row['mer (% p.a) ##'] || '0') || 0,
               aum: parseFloat(row['fum ($m)#'] || '0') || 0,
+              price: parseNumberLoose(row['last ($)'] ?? row['last price ($)'] ?? row['price ($)'] ?? row['market price ($)']),
               date: { month: mmm, year: year, monthName: monthName }
             }));
           
           allETFs.push(...etfs);
           console.log(`Added ${etfs.length} ETFs from ${mmm} ${year}`);
           
-          // Save individual month data
+          // Save individual month data (JSON + CSV)
           const monthDataFile = path.join(DATA_DIR, `etf_data_${year}_${mmm}.json`);
           fs.writeFileSync(monthDataFile, JSON.stringify({ 
             data: etfs, 
             timestamp: Date.now(), 
             dataDate: { month: mmm, year: year, monthName: monthName }
           }));
+          const monthCsvFile = path.join(DATA_DIR, `etf_data_${year}_${mmm}.csv`);
+          fs.writeFileSync(monthCsvFile, toCsv(etfs));
           
           break; // Successfully got this month, move to next
         } catch (error) {
@@ -271,10 +317,13 @@ export async function fetchLatestETFData(): Promise<{ etfs: ETFData[]; dataDate:
         },
         mer: parseFloat(row['mer (% p.a) ##'] || '0') || 0,
         aum: parseFloat(row['fum ($m)#'] || '0') || 0,
+        price: parseNumberLoose(row['last ($)'] ?? row['last price ($)'] ?? row['price ($)'] ?? row['market price ($)']),
       }));
 
-    // Save to cache
+    // Save to cache (JSON + CSV)
     fs.writeFileSync(DATA_FILE, JSON.stringify({ data: etfs, timestamp: Date.now(), dataDate: excelData.dateInfo }));
+    const latestCsv = path.join(DATA_DIR, `etf_data_${excelData.dateInfo.year}_${excelData.dateInfo.month}.csv`);
+    fs.writeFileSync(latestCsv, toCsv(etfs));
     return { etfs, dataDate: excelData.dateInfo };
   } catch (error) {
     console.error('Error fetching ETF data:', error);
